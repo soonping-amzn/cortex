@@ -9,9 +9,6 @@
 VERSION=$(shell cat "./VERSION" 2> /dev/null)
 GOPROXY_VALUE=$(shell go env GOPROXY)
 
-# ARCHS
-ARCHS       = amd64 arm64
-
 # Boiler plate for building Docker containers.
 # All this must go at top of file I'm afraid.
 IMAGE_PREFIX ?= quay.io/cortexproject/
@@ -40,9 +37,8 @@ SED ?= $(shell which gsed 2>/dev/null || which sed)
 # Dependencies (i.e. things that go in the image) still need to be explicitly
 # declared.
 %/$(UPTODATE): %/Dockerfile
-	for arch in $(ARCHS); do \
-		$(SUDO) docker buildx build --platform linux/$$arch --build-arg=revision=$(GIT_REVISION) --build-arg=goproxyValue=$(GOPROXY_VALUE) -t $(IMAGE_PREFIX)$(shell basename $(@D)) -t $(IMAGE_PREFIX)$(shell basename $(@D)):$(IMAGE_TAG)-$$arch $(@D)/ ; \
-	done
+	@echo
+	$(SUDO) docker build --build-arg=revision=$(GIT_REVISION) --build-arg=goproxyValue=$(GOPROXY_VALUE) -t $(IMAGE_PREFIX)$(shell basename $(@D)) -t $(IMAGE_PREFIX)$(shell basename $(@D)):$(IMAGE_TAG) $(@D)/
 	@echo
 	@echo Please use push-multiarch-build-image to build and push build image for all supported architectures.
 	touch $@
@@ -164,11 +160,7 @@ else
 exes: $(EXES)
 
 $(EXES):
-	@for arch in $(ARCHS); do \
-  		echo "Building $@ for $$arch";\
-  		CGO_ENABLED=0 GOARCH=$$arch GOOS=linux go build $(GO_FLAGS) -o $@-$$arch ./$(@D); \
-  	done
-
+	CGO_ENABLED=0 go build $(GO_FLAGS) -o $@ ./$(@D)
 
 protos: $(PROTO_GOS)
 
@@ -280,20 +272,16 @@ clean-protos:
 
 save-images:
 	@mkdir -p docker-images
-	@for image_name in $(IMAGE_NAMES); do \
+	for image_name in $(IMAGE_NAMES); do \
 		if ! echo $$image_name | grep build; then \
-		  	for arch in $(ARCHS); do \
-				docker save $$image_name:$(IMAGE_TAG)-$$arch -o docker-images/$$(echo $$image_name | tr "/" _):$(IMAGE_TAG)-$$arch; \
-			done;\
+			docker save $$image_name:$(IMAGE_TAG) -o docker-images/$$(echo $$image_name | tr "/" _):$(IMAGE_TAG); \
 		fi \
 	done
 
 load-images:
-	@for image_name in $(IMAGE_NAMES); do \
+	for image_name in $(IMAGE_NAMES); do \
 		if ! echo $$image_name | grep build; then \
-		  	for arch in $(ARCHS); do \
-				docker load -i docker-images/$$(echo $$image_name | tr "/" _):$(IMAGE_TAG)-$$arch; \
-			done;\
+			docker load -i docker-images/$$(echo $$image_name | tr "/" _):$(IMAGE_TAG); \
 		fi \
 	done
 
